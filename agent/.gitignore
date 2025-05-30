@@ -124,6 +124,10 @@ celerybeat.pid
 # Environments
 .env
 .venv
+.env.kiki
+.env.dating
+.env.groq
+.env.belinda
 env/
 venv/
 ENV/

@@ -14,14 +14,79 @@ import { useKrispNoiseFilter } from "@livekit/components-react/krisp";
 import { AnimatePresence, motion } from "framer-motion";
 import { MediaDeviceFailure } from "livekit-client";
 import { useCallback, useEffect, useState } from "react";
-import type { ConnectionDetails } from "./api/connection-details/route";
+import type { ConnectionDetails } from "@/app/api/connection-details/route";
 import Image from "next/image";
+import { requestWakeLock, releaseWakeLock, WakeLockSentinel } from "@/lib/wakelock";
+
+// Helper to register service worker for PWA functionality
+const registerServiceWorker = async () => {
+  if (typeof window !== 'undefined' && 'serviceWorker' in navigator) {
+    try {
+      await navigator.serviceWorker.register('/sw.js');
+      console.log('Service worker registered successfully');
+    } catch (error) {
+      console.error('Service worker registration failed:', error);
+    }
+  }
+};
+
+// Hook for managing wakelock in the component
+const useScreenWakeLock = () => {
+  const [wakeLock, setWakeLock] = useState<WakeLockSentinel | null>(null);
+
+  const acquireWakeLock = async () => {
+    if (wakeLock && !wakeLock.released) return; // Already have active wakelock
+    
+    const lock = await requestWakeLock();
+    setWakeLock(lock);
+    
+    // Add release event listener
+    if (lock) {
+      lock.addEventListener('release', () => {
+        console.log('Wake Lock was released');
+        setWakeLock(null);
+      });
+    }
+  };
+
+  const releaseScreenLock = async () => {
+    await releaseWakeLock(wakeLock);
+    setWakeLock(null);
+  };
+
+  useEffect(() => {
+    // Clean up on component unmount
+    return () => {
+      if (wakeLock) releaseWakeLock(wakeLock);
+    };
+  }, [wakeLock]);
+
+  return { wakeLock, acquireWakeLock, releaseScreenLock };
+};
 
 export default function Page() {
   const [connectionDetails, updateConnectionDetails] = useState<
     ConnectionDetails | undefined
   >(undefined);
   const [agentState, setAgentState] = useState<AgentState>("disconnected");
+  const { wakeLock, acquireWakeLock, releaseScreenLock } = useScreenWakeLock();
+  
+  // Register service worker on component mount
+  useEffect(() => {
+    registerServiceWorker();
+  }, []);
+  
+  // Handle wakelock based on agent state
+  useEffect(() => {
+    // Check if the agent is in an active state where screen should stay on
+    const isActiveState = ['connected', 'listening', 'speaking'].includes(agentState);
+    
+    if (isActiveState) {
+      acquireWakeLock();
+    } else if (agentState === 'disconnected') {
+      releaseScreenLock();
+    }
+  }, [agentState, acquireWakeLock, releaseScreenLock]);
 
   const onConnectButtonClicked = useCallback(async () => {
     // Generate room connection details, including:
@@ -46,6 +111,12 @@ export default function Page() {
   return (
     <main data-lk-theme="default" className="h-full flex items-center">
       <div className="w-full grid grid-rows-[64px_1fr_8px] lg:border border-white/20 h-full min-h-dvh lg:max-w-5xl mx-auto lg:min-h-[640px] lg:max-h-[640px] rounded-2xl px-4">
+        {/* Wakelock status indicator - only visible during development */}
+        {process.env.NODE_ENV === 'development' && (
+          <div className="fixed top-0 right-0 bg-black/70 text-white text-xs p-1 z-50">
+            WakeLock: {wakeLock ? 'Active' : 'Inactive'}
+          </div>
+        )}
         <header className="border-b border-white/20">
           <div className="py-4 px-2 flex items-center justify-between">
             <a href="https://groq.com" target="_blank">

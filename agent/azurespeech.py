@@ -12,7 +12,7 @@ from livekit.agents.llm import (
     ChatMessage,
 )
 from livekit.agents.pipeline import VoicePipelineAgent
-from livekit.plugins import silero, openai, azure
+from livekit.plugins import silero, groq, azure
 
 from dotenv import load_dotenv
 
@@ -97,13 +97,7 @@ async def entrypoint(ctx: JobContext):
             speech_key=os.environ["AZURE_STT_API_KEY"],
             speech_region=os.environ["AZURE_STT_REGION"]
         ),
-        llm=openai.LLM.with_azure(
-                    api_key=os.environ["AZURE_OPENAI_API_KEY"],
-                    azure_endpoint=os.environ["AZURE_OPENAI_ENDPOINT"],
-                    azure_deployment=os.environ["AZURE_OPENAI_DEPLOYMENT"],
-                    api_version=os.environ["AZURE_OPENAI_VERSION"],
-                    temperature=1.0,
-                ),
+        llm=groq.LLM(),
         tts=azure.TTS(
             speech_key=os.environ["AZURE_TTS_API_KEY"],
             speech_region=os.environ["AZURE_TTS_REGION"]
